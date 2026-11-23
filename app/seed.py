@@ -1,4 +1,3 @@
-
 from datetime import datetime, timedelta
 
 from app.database import SessionLocal
@@ -7,9 +6,7 @@ from app.models import Doctors, Slots
 
 def seed_data():
     db = SessionLocal()
-
     try:
-        # Avoid inserting duplicate doctors every time
         if db.query(Doctors).count() > 0:
             print("Doctors already exist. Skipping seed.")
             return
@@ -34,37 +31,32 @@ def seed_data():
                 is_active=True,
             ),
         ]
-
         db.add_all(doctors)
         db.flush()
 
+        # Seed appointments for tomorrow so the sample slots are in the future.
+        tomorrow = (datetime.now() + timedelta(days=1)).date()
         slots = []
-
         for doctor in doctors:
             for hour in [9, 10, 11, 14, 15]:
-                start_time = datetime.now().replace(
-                    hour=hour,
-                    minute=0,
-                    second=0,
-                    microsecond=0,
-                )
-
+                start_time = datetime.combine(
+                    tomorrow,
+                    datetime.min.time(),
+                ).replace(hour=hour)
                 slots.append(
                     Slots(
                         doctor_id=doctor.id,
-                        date=start_time,
+                        start_time=start_time,
+                        end_time=start_time + timedelta(minutes=30),
                     )
                 )
 
         db.add_all(slots)
         db.commit()
-
         print("Sample doctors and slots added successfully.")
-
     except Exception:
         db.rollback()
         raise
-
     finally:
         db.close()
 
