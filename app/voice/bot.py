@@ -10,6 +10,13 @@ from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker
 
 from pipecat.processors.aggregators.llm_context import LLMContext
+
+from app.voice.tools import (
+    find_doctors,
+    check_doctor_availability,
+    book_appointment,
+    cancel_appointment,
+)
 from pipecat.processors.aggregators.llm_response_universal import (
     LLMContextAggregatorPair,
     LLMUserAggregatorParams,
@@ -60,8 +67,15 @@ async def run_bot(
                 "You help callers check doctor availability, "
                 "book appointments, and cancel appointments. "
                 "Speak naturally and keep responses concise. "
-                "Never claim an appointment is booked or "
-                "cancelled unless the backend confirms it."
+                "Use the provided tools for doctor search, availability, "
+                "booking, and cancellation. Never invent doctor IDs, slot IDs, "
+                "appointment IDs, or available times. Use only IDs returned "
+                "by tools. Before booking, collect and read back the caller's "
+                "name, phone number, doctor, date, and exact slot; call the "
+                "booking tool only after explicit confirmation. For cancellation, "
+                "collect appointment ID and registered phone number. Never claim "
+                "success unless the tool returns success=true. If a tool fails, "
+                "explain briefly and do not claim the action completed. Speak concisely."
             ),
         ),
     )
@@ -75,7 +89,14 @@ async def run_bot(
     )
 
     # 4. Conversation memory
-    context = LLMContext()
+    context = LLMContext(
+        tools=[
+            find_doctors,
+            check_doctor_availability,
+            book_appointment,
+            cancel_appointment,
+        ]
+    )
 
     user_aggregator, assistant_aggregator = (
         LLMContextAggregatorPair(
