@@ -84,10 +84,9 @@ async def check_doctor_availability(params, doctor_id: int, requested_date: str)
         doctor_id: Doctor ID returned by find_doctors.
         requested_date: Date as YYYY-MM-DD.
     """
-    args = params.arguments
     try:
-        day = date.fromisoformat(args["requested_date"])
-        doctor_id = int(args["doctor_id"])
+        day = date.fromisoformat(requested_date)
+        doctor_id = int(doctor_id)
     except (KeyError, TypeError, ValueError):
         await _send(params, {"success": False, "message": "Provide a valid doctor ID and YYYY-MM-DD date."})
         return
@@ -128,14 +127,13 @@ async def book_appointment(params, doctor_id: int, slot_id: int, patient_name: s
         patient_name: Caller full name.
         phone_number: Caller phone number, repeated back and confirmed.
     """
-    args = params.arguments
     db = SessionLocal()
     try:
         payload = AppointmentCreate(
-            doctor_id=int(args["doctor_id"]),
-            slot_id=int(args["slot_id"]),
-            patient_name=args["patient_name"].strip(),
-            phone_number=args["phone_number"].strip(),
+            doctor_id=int(doctor_id),
+            slot_id=int(slot_id),
+            patient_name=patient_name.strip(),
+            phone_number=phone_number.strip(),
         )
         appointment = create_appointment(payload, db)
         await _send(params, _appointment_payload(db, appointment))
@@ -156,11 +154,10 @@ async def cancel_appointment(params, appointment_id: int, phone_number: str):
         appointment_id: Appointment ID provided or confirmed by the caller.
         phone_number: Phone number registered for the appointment.
     """
-    args = params.arguments
     db = SessionLocal()
     try:
-        appointment_id = int(args["appointment_id"])
-        request = CancelAppointmentRequest(phone_number=args["phone_number"].strip())
+        appointment_id = int(appointment_id)
+        request = CancelAppointmentRequest(phone_number=phone_number.strip())
         appointment = cancel_existing_appointment(appointment_id, request, db)
         await _send(params, _appointment_payload(db, appointment))
     except HTTPException as exc:
