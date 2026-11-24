@@ -1,5 +1,7 @@
 
 import os
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 from loguru import logger
@@ -16,6 +18,7 @@ from app.voice.tools import (
     check_doctor_availability,
     book_appointment,
     cancel_appointment,
+    reschedule_appointment,
 )
 from pipecat.processors.aggregators.llm_response_universal import (
     LLMContextAggregatorPair,
@@ -54,14 +57,23 @@ async def run_bot(
     )
 
     # 2. Language model
+    today_ist = datetime.now(ZoneInfo("Asia/Kolkata")).date().isoformat()
     llm = GroqLLMService(
         api_key=os.environ["GROQ_API_KEY"],
         settings=GroqLLMService.Settings(
             model=os.getenv(
                 "GROQ_MODEL",
-                "llama-3.1-8b-instant",
+                "openai/gpt-oss-20b",
             ),
             system_instruction=(
+                f"Today's date is {today_ist}; caller timezone is Asia/Kolkata (IST). "
+                "Interpret relative dates like tomorrow and the 25th using this date. "
+                "For availability, pass requested_date in YYYY-MM-DD format. "
+                "For rescheduling, first collect the existing appointment ID and registered phone number, "
+                "then identify the doctor from that appointment if available, check the requested date, "
+                "offer only returned slot IDs, and call reschedule_appointment only after the caller "
+                "confirms the new slot. Never cancel the original appointment before rescheduling. "
+                "After successful rescheduling, tell the caller the appointment ID and new date/time. "
                 "You are Voice Doctor, a polite and helpful "
                 "medical appointment booking voice assistant. "
                 "You help callers check doctor availability, "
@@ -95,6 +107,7 @@ async def run_bot(
             check_doctor_availability,
             book_appointment,
             cancel_appointment,
+            reschedule_appointment,
         ]
     )
 
