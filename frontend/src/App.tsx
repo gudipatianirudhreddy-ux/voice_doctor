@@ -47,9 +47,9 @@ function appointmentMatchesFilter(item: Appointment, filter: AppointmentFilter) 
 
 function cleanTranscript(text: string) {
   return text
-    .replace(/\\*\\*(.*?)\\*\\*/g, "$1")
-    .replace(/^\\s*(?:\\d+[.)]|[-*])\\s*/gm, "")
-    .replace(/\\s+/g, " ")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/^\s*(?:\d+[.)]|[-*])\s*/gm, "")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -142,7 +142,15 @@ export default function App() {
           setTransportState(String(state));
         },
         onConnected: () => setVoiceState("connected"),
-        onBotReady: () => setVoiceState("connected"),
+        onBotReady: () => {
+          setVoiceState("connected");
+          // The backend sends this fixed greeting through TTS without an LLM turn.
+          setTranscript((lines) =>
+            lines.some((line) => line.speaker === "Voice Doctor" && line.text === "Welcome to Voice Doctor! How can I help you today?")
+              ? lines
+              : [...lines, { id: ++lineId.current, speaker: "Voice Doctor", text: "Welcome to Voice Doctor! How can I help you today?" }],
+          );
+        },
         onDisconnected: () => {
           setVoiceState("idle");
           setTransportState("disconnected");
@@ -152,8 +160,15 @@ export default function App() {
           setVoiceState("error");
         },
         onUserTranscript: (data: TranscriptData) => {
-          if (data.final && data.text.trim()) {
+          // Render interim STT updates too, then reconcile with the final transcript.
+          if (data.text.trim()) {
             setTranscript((lines) => addTranscriptLine(lines, "You", data.text, () => ++lineId.current));
+          }
+        },
+        onBotLlmText: (data: BotLLMTextData) => {
+          // This event streams generated text while the model is responding.
+          if (data.text.trim()) {
+            setTranscript((lines) => addTranscriptLine(lines, "Voice Doctor", data.text, () => ++lineId.current));
           }
         },
         onBotTranscript: (data: BotLLMTextData) => {
