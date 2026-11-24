@@ -53,24 +53,17 @@ function cleanTranscript(text: string) {
     .trim();
 }
 
-function addTranscriptLine(
+function upsertTranscriptLine(
   lines: TranscriptLine[],
+  id: number,
   speaker: TranscriptLine["speaker"],
   rawText: string,
-  nextId: () => number,
 ) {
   const text = cleanTranscript(rawText);
   if (!text) return lines;
-  const last = lines[lines.length - 1];
-  if (last?.speaker === speaker) {
-    if (text.startsWith(last.text)) {
-      return [...lines.slice(0, -1), { ...last, text }];
-    }
-    if (last.text.endsWith(text)) return lines;
-    const separator = /[\\s.,!?;:]$/.test(last.text) ? "" : " ";
-    return [...lines.slice(0, -1), { ...last, text: last.text + separator + text }];
-  }
-  return [...lines, { id: nextId(), speaker, text }];
+  const index = lines.findIndex((line) => line.id === id);
+  if (index < 0) return [...lines, { id, speaker, text }];
+  return lines.map((line, i) => i === index ? { ...line, text } : line);
 }
 
 const PIPECAT_URL = (import.meta.env.VITE_PIPECAT_BASE_URL ?? "http://localhost:7860").replace(/\/$/, "");
@@ -92,6 +85,9 @@ export default function App() {
   const clientRef = useRef<PipecatClient | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lineId = useRef(0);
+  const userStreamingId = useRef<number | null>(null);
+  const botStreamingId = useRef<number | null>(null);
+  const botStreamingText = useRef("");
 
   useEffect(() => {
     let active = true;
@@ -160,21 +156,37 @@ export default function App() {
           setVoiceState("error");
         },
         onUserTranscript: (data: TranscriptData) => {
-          // Render interim STT updates too, then reconcile with the final transcript.
-          if (data.text.trim()) {
-            setTranscript((lines) => addTranscriptLine(lines, "You", data.text, () => ++lineId.current));
-          }
+          const text = data.text.trim();
+          if (!text) return;
+          // Interim STT callbacks update a single bubble; the final callback
+          // replaces that bubble instead of appending duplicate fragments.
+          if (userStreamingId.current === null) userStreamingId.current = ++lineId.current;
+          const id = userStreamingId.current;
+          setTranscript((lines) => upsertTranscriptLine(lines, id, "You", text));
+          if (data.final) userStreamingId.current = null;
         },
         onBotLlmText: (data: BotLLMTextData) => {
-          // This event streams generated text while the model is responding.
-          if (data.text.trim()) {
-            setTranscript((lines) => addTranscriptLine(lines, "Voice Doctor", data.text, () => ++lineId.current));
+          const chunk = data.text;
+          if (!chunk.trim()) return;
+          // LLM text arrives in chunks. Accumulate into one assistant bubble.
+          if (botStreamingId.current === null) {
+            botStreamingId.current = ++lineId.current;
+            botStreamingText.current = "";
           }
+          botStreamingText.current += chunk;
+          const id = botStreamingId.current;
+          const fullText = botStreamingText.current;
+          setTranscript((lines) => upsertTranscriptLine(lines, id, "Voice Doctor", fullText));
         },
         onBotTranscript: (data: BotLLMTextData) => {
-          if (data.text.trim()) {
-            setTranscript((lines) => addTranscriptLine(lines, "Voice Doctor", data.text, () => ++lineId.current));
-          }
+          const finalText = data.text.trim();
+          if (!finalText) return;
+          // The completed transcript is authoritative; reconcile the streamed
+          // bubble rather than creating a second copy of the same response.
+          const id = botStreamingId.current ?? ++lineId.current;
+          setTranscript((lines) => upsertTranscriptLine(lines, id, "Voice Doctor", finalText));
+          botStreamingId.current = null;
+          botStreamingText.current = "";
         },
         onTrackStarted: (track: MediaStreamTrack, participant?: Participant) => {
           if (track.kind === "audio" && !participant?.local && audioRef.current) {
@@ -191,6 +203,9 @@ export default function App() {
   async function startVoiceCall() {
     setVoiceError("");
     setTranscript([]);
+    userStreamingId.current = null;
+    botStreamingId.current = null;
+    botStreamingText.current = "";
     setVoiceState("connecting");
     try {
       const client = getClient();
