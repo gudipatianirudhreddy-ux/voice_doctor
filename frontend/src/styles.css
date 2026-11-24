@@ -40,3 +40,11 @@
 .doctor-avatar{width:38px;height:38px;border-radius:11px;background:#eaf8f4;color:#39a88c;display:grid;place-items:center;flex-shrink:0}
 .doctor-card small{display:block;line-height:1.6;margin-top:7px}
 @media(max-width:650px){.doctor-grid{grid-template-columns:1fr}.data-row{align-items:flex-start}.appointment-status{margin-top:2px}}
+
+
+/* Appointment history refinements */
+.appointment-filters{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 6px}
+.filter-chip{border:1px solid #e5ebf1;background:#fff;color:#78889b;border-radius:22px;padding:8px 14px;font-size:11px;font-weight:600;cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+.filter-chip:hover{border-color:#b7dcd5;color:#348f80}
+.filter-chip.active{background:#e8f7f2;border-color:#c9eee3;color:#258d76}
+.compact-empty{padding:28px 12px}
