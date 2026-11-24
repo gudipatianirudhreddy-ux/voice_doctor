@@ -7,7 +7,7 @@ from sqlalchemy import or_
 from pipecat.services.llm_service import FunctionCallParams
 
 from app.database import SessionLocal
-from app.models import Doctors, Patient, Slots, appointment as Appointment
+from app.models import Doctors, Patient, Slots, Status, appointment as Appointment
 from app.schemas import AppointmentCreate, CancelAppointmentRequest
 from app.service.appointment import (
     book_appointment as create_appointment,
@@ -167,5 +167,82 @@ async def cancel_appointment(params: FunctionCallParams, appointment_id: int, ph
         await _send(params, {"success": False, "message": "Appointment ID or phone number is invalid."})
     except Exception:
         await _send(params, {"success": False, "message": "Cancellation failed temporarily. Do not claim it was cancelled."})
+    finally:
+        db.close()
+
+
+async def reschedule_appointment(
+    params: FunctionCallParams,
+    appointment_id: int,
+    phone_number: str,
+    new_slot_id: int,
+):
+    """Reschedule an existing appointment after verifying its appointment ID and registered phone.
+
+    Args:
+        appointment_id: Existing appointment reference supplied by the caller.
+        phone_number: Phone number registered to the appointment, confirmed by caller.
+        new_slot_id: Available slot ID returned by check_doctor_availability for the requested date.
+    """
+    from app.service.appointment import reschedule_appointment as move_appointment
+
+    db = SessionLocal()
+    try:
+        appointment = move_appointment(
+            appointment_id=int(appointment_id),
+            phone_number=phone_number.strip(),
+            new_slot_id=int(new_slot_id),
+            db=db,
+        )
+        await _send(params, _appointment_payload(db, appointment))
+    except HTTPException as exc:
+        await _send(params, {"success": False, "message": exc.detail})
+    except (KeyError, TypeError, ValueError):
+        await _send(params, {"success": False, "message": "Appointment ID, phone number, or slot ID is invalid."})
+    except Exception:
+        await _send(params, {"success": False, "message": "Rescheduling failed temporarily. Do not claim the appointment was changed."})
+    finally:
+        db.close()
+
+
+async def get_appointment_for_reschedule(
+    params: FunctionCallParams,
+    appointment_id: int,
+    phone_number: str,
+):
+    """Verify an appointment and retrieve its doctor ID before checking a reschedule date.
+
+    Args:
+        appointment_id: Appointment reference provided by the caller.
+        phone_number: Phone number registered to that appointment.
+    """
+    db = SessionLocal()
+    try:
+        appointment = db.query(Appointment).filter(Appointment.id == int(appointment_id)).first()
+        if appointment is None:
+            await _send(params, {"success": False, "message": "Appointment not found."})
+            return
+        patient = db.query(Patient).filter(Patient.id == appointment.patient_id).first()
+        if patient is None or patient.phone != phone_number.strip():
+            await _send(params, {"success": False, "message": "Phone number does not match the appointment patient."})
+            return
+        if appointment.status == Status.CANCELLED:
+            await _send(params, {"success": False, "message": "This appointment is cancelled and cannot be rescheduled."})
+            return
+        doctor = db.query(Doctors).filter(Doctors.id == appointment.doctor_id).first()
+        slot = db.query(Slots).filter(Slots.id == appointment.slot_id).first()
+        await _send(params, {
+            "success": True,
+            "appointment_id": appointment.id,
+            "doctor_id": appointment.doctor_id,
+            "doctor_name": doctor.name if doctor else None,
+            "current_start_time": _iso(slot.start_time) if slot else None,
+            "current_end_time": _iso(slot.end_time) if slot else None,
+            "status": appointment.status.value,
+        })
+    except (TypeError, ValueError):
+        await _send(params, {"success": False, "message": "Appointment ID is invalid."})
+    except Exception:
+        await _send(params, {"success": False, "message": "Could not retrieve appointment details."})
     finally:
         db.close()
