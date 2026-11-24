@@ -11,11 +11,13 @@ import {
   type TransportState,
 } from "@pipecat-ai/client-js";
 import { SmallWebRTCTransport } from "@pipecat-ai/small-webrtc-transport";
-import { api } from "./lib/api";
+import { api, type Appointment, type Doctor } from "./lib/api";
 
 type ApiState = "checking" | "online" | "offline";
 type VoiceState = "idle" | "connecting" | "connected" | "error";
 type TranscriptLine = { id: number; speaker: "You" | "Voice Doctor"; text: string };
+type Page = "overview" | "appointments" | "doctors";
+
 
 function cleanTranscript(text: string) {
   return text
@@ -54,6 +56,12 @@ export default function App() {
   const [voiceError, setVoiceError] = useState("");
   const [transportState, setTransportState] = useState("disconnected");
   const [transcript, setTranscript] = useState<TranscriptLine[]>([]);
+  const [page, setPage] = useState<Page>("overview");
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [dataLoading, setDataLoading] = useState(false);
+  const [dataError, setDataError] = useState("");
+
   const clientRef = useRef<PipecatClient | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lineId = useRef(0);
@@ -73,6 +81,28 @@ export default function App() {
       });
     return () => { active = false; };
   }, []);
+
+  async function refreshDashboard() {
+    setDataLoading(true);
+    setDataError("");
+    try {
+      const [appointmentRows, doctorRows] = await Promise.all([
+        api.appointments(),
+        api.doctors(),
+      ]);
+      setAppointments(appointmentRows);
+      setDoctors(doctorRows);
+    } catch (error) {
+      setDataError(error instanceof Error ? error.message : "Could not load dashboard data.");
+    } finally {
+      setDataLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (apiState === "online") void refreshDashboard();
+  }, [apiState]);
+
 
   function getClient() {
     if (clientRef.current) return clientRef.current;
@@ -149,9 +179,9 @@ export default function App() {
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark"><HeartPulse size={22} /></span><span>voice<span className="brand-light">doctor</span><small>by NexovAI</small></span></div>
         <div className="sidebar-label">WORKSPACE</div>
-        <a className="nav-item active"><Activity size={18} /> Overview</a>
-        <a className="nav-item"><CalendarDays size={18} /> Appointments</a>
-        <a className="nav-item"><Stethoscope size={18} /> Doctors</a>
+        <button className={`nav-item ${page === "overview" ? "active" : ""}`} onClick={() => setPage("overview")} aria-current={page === "overview" ? "page" : undefined}><Activity size={18} /> Overview</button>
+        <button className={`nav-item ${page === "appointments" ? "active" : ""}`} onClick={() => setPage("appointments")} aria-current={page === "appointments" ? "page" : undefined}><CalendarDays size={18} /> Appointments</button>
+        <button className={`nav-item ${page === "doctors" ? "active" : ""}`} onClick={() => setPage("doctors")} aria-current={page === "doctors" ? "page" : undefined}><Stethoscope size={18} /> Doctors</button>
         <div className="sidebar-bottom"><ShieldCheck size={17} /><span>Private by design<br/><small>Voice session demo</small></span></div>
       </aside>
 
@@ -166,10 +196,27 @@ export default function App() {
 
         {transcript.length > 0 && <section className="appointments-panel transcript-panel"><div className="panel-heading"><div><h2>Conversation</h2><p>Live transcript from your voice session.</p></div><span className="panel-icon"><Mic size={19}/></span></div><div className="transcript-list" aria-live="polite">{transcript.map((line) => <div className={`transcript-line ${line.speaker === "You" ? "user-line" : "bot-line"}`} key={line.id}><strong>{line.speaker}</strong><p>{line.text}</p></div>)}</div></section>}
 
-        <div className="section-heading"><div><h2>Your care at a glance</h2><p>A clear view of your appointment activity.</p></div><button className="text-button" disabled>View all <span>→</span></button></div>
-        <div className="stats-grid"><article className="stat-card"><div className="stat-icon blue"><CalendarDays size={19}/></div><span className="stat-label">Appointments</span><strong>—</strong><small>Recent bookings</small></article><article className="stat-card"><div className="stat-icon green"><Users size={19}/></div><span className="stat-label">Doctors</span><strong>—</strong><small>Available specialists</small></article><article className="stat-card"><div className="stat-icon amber"><Clock3 size={19}/></div><span className="stat-label">Next visit</span><strong>—</strong><small>Your upcoming care</small></article></div>
+        {page === "overview" && <>
+        <div className="section-heading"><div><h2>Your care at a glance</h2><p>A clear view of your appointment activity.</p></div><button className="text-button" onClick={() => setPage("appointments")}>View all <span>→</span></button></div>
+        <div className="stats-grid"><article className="stat-card"><div className="stat-icon blue"><CalendarDays size={19}/></div><span className="stat-label">Appointments</span><strong>{appointments.length}</strong><small>Recent bookings</small></article><article className="stat-card"><div className="stat-icon green"><Users size={19}/></div><span className="stat-label">Doctors</span><strong>{doctors.length}</strong><small>Available specialists</small></article><article className="stat-card"><div className="stat-icon amber"><Clock3 size={19}/></div><span className="stat-label">Next visit</span><strong>{appointments.filter((item) => item.status.toLowerCase() !== "cancelled").length ? new Date(appointments.find((item) => item.status.toLowerCase() !== "cancelled")!.start_time).toLocaleDateString() : "—"}</strong><small>Your upcoming care</small></article></div>
 
-        <section className="appointments-panel"><div className="panel-heading"><div><h2>Recent appointments</h2><p>Your latest appointment updates will appear here.</p></div><span className="panel-icon"><CalendarDays size={19}/></span></div><div className="empty-state"><div className="empty-icon"><CalendarDays size={24}/></div><strong>Nothing scheduled yet</strong><p>Once you book an appointment, you'll find the details here.</p></div></section>
+        <section className="appointments-panel"><div className="panel-heading"><div><h2>Recent appointments</h2><p>Your latest appointment updates will appear here.</p></div><button className="icon-button" onClick={() => void refreshDashboard()} disabled={dataLoading} aria-label="Refresh recent appointments"><CalendarDays size={19}/></button></div>{dataError && <p className="data-error" role="alert">{dataError}</p>}{dataLoading ? <p className="data-message">Loading appointments…</p> : appointments.length === 0 ? <div className="empty-state"><div className="empty-icon"><CalendarDays size={24}/></div><strong>Nothing scheduled yet</strong><p>Once you book an appointment, you'll find the details here.</p></div> : <div className="data-list">{appointments.slice(0,4).map((item) => <article className="data-row" key={item.appointment_id}><div><strong>{item.patient_name}</strong><p>{item.doctor_name} · {item.specialty}</p><small>{new Date(item.start_time).toLocaleString()}</small></div><span className={`appointment-status ${item.status.toLowerCase()}`}>{item.status}</span></article>}</div>}</section>
+        </>}
+
+        {page === "appointments" && <section className="appointments-panel page-panel">
+          <div className="panel-heading"><div><h2>Appointments</h2><p>Your appointment history and upcoming visits.</p></div><button className="icon-button" onClick={() => void refreshDashboard()} disabled={dataLoading} aria-label="Refresh appointments"><Activity size={17}/></button></div>
+          {dataError && <p className="data-error" role="alert">{dataError}</p>}
+          {dataLoading ? <p className="data-message">Loading appointments…</p> : appointments.length === 0 ? <div className="empty-state"><div className="empty-icon"><CalendarDays size={24}/></div><strong>No appointments found</strong><p>Appointments booked through Voice Doctor will appear here.</p></div> :
+            <div className="data-list">{appointments.map((item) => <article className="data-row" key={item.appointment_id}><div><strong>{item.patient_name}</strong><p>{item.doctor_name} · {item.specialty}</p><small>{new Date(item.start_time).toLocaleString()}</small></div><span className={`appointment-status ${item.status.toLowerCase()}`}>{item.status}</span></article>)}</div>}
+        </section>}
+
+        {page === "doctors" && <section className="appointments-panel page-panel">
+          <div className="panel-heading"><div><h2>Doctors</h2><p>Browse available specialists.</p></div><button className="icon-button" onClick={() => void refreshDashboard()} disabled={dataLoading} aria-label="Refresh doctors"><Activity size={17}/></button></div>
+          {dataError && <p className="data-error" role="alert">{dataError}</p>}
+          {dataLoading ? <p className="data-message">Loading doctors…</p> : doctors.length === 0 ? <div className="empty-state"><div className="empty-icon"><Stethoscope size={24}/></div><strong>No doctors available</strong><p>Check back when the doctor directory is populated.</p></div> :
+            <div className="doctor-grid">{doctors.map((doctor) => <article className="doctor-card" key={doctor.id}><div className="doctor-avatar"><Stethoscope size={20}/></div><div><strong>{doctor.name}</strong><p>{doctor.specialty}</p>{doctor.description && <small>{doctor.description}</small>}</div></article>)}</div>}
+        </section>}
+
         <footer><span>© 2026 NexovAI</span><span className="backend-status"><span className={`status-dot ${apiState}`}/>{apiMessage}</span><span className="backend-status"><Wifi size={12}/>{transportState}</span></footer>
       </section>
     </main>
