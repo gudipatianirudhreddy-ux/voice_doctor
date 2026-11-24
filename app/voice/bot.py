@@ -59,7 +59,7 @@ async def run_bot(
         settings=GroqLLMService.Settings(
             model=os.getenv(
                 "GROQ_MODEL",
-                "llama-3.1-8b-instant",
+                "openai/gpt-oss-20b",
             ),
             system_instruction=(
                 "You are Voice Doctor, a polite and helpful "
