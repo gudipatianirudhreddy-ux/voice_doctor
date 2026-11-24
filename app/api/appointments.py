@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas import AppointmentCreate, CancelAppointmentRequest
-from app.service.appointment import book_appointment, cancel_appointment
+from app.schemas import AppointmentCreate, CancelAppointmentRequest, RescheduleAppointmentRequest
+from app.service.appointment import book_appointment, cancel_appointment, reschedule_appointment
 
 router = APIRouter(prefix="/appointments", tags=["Appointments"])
 
@@ -25,5 +25,19 @@ def cancel_existing_appointment(
     return cancel_appointment(
         appointment_id=appointment_id,
         cancellation_data=cancellation_data,
+        db=db,
+    )
+
+
+@router.put("/{appointment_id}/reschedule")
+def reschedule_existing_appointment(
+    appointment_id: int,
+    request: RescheduleAppointmentRequest,
+    db: Session = Depends(get_db),
+):
+    return reschedule_appointment(
+        appointment_id=appointment_id,
+        phone_number=request.phone_number,
+        new_slot_id=request.new_slot_id,
         db=db,
     )
