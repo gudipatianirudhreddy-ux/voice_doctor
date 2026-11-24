@@ -264,3 +264,58 @@ def cancel_appointment(
         raise
 
     return existing_appointment
+
+
+def reschedule_appointment(
+    appointment_id: int,
+    phone_number: str,
+    new_slot_id: int,
+    db: Session,
+):
+    """Move a verified appointment to another available slot without cancelling first."""
+    existing = (
+        db.query(Appointment)
+        .filter(Appointment.id == appointment_id)
+        .with_for_update()
+        .first()
+    )
+    if existing is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found")
+
+    patient = db.query(Patient).filter(Patient.id == existing.patient_id).first()
+    if patient is None or patient.phone != phone_number.strip():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Phone number does not match the appointment patient",
+        )
+    if existing.status == Status.CANCELLED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot reschedule a cancelled appointment",
+        )
+
+    new_slot = check_slot_availability(new_slot_id, db)
+    if new_slot.doctor_id != existing.doctor_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Rescheduling must use a slot with the same doctor",
+        )
+    if new_slot.start_time <= datetime.now():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot reschedule to a slot in the past",
+        )
+    if new_slot.id == existing.slot_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Appointment is already scheduled for that slot",
+        )
+
+    existing.slot_id = new_slot.id
+    try:
+        db.commit()
+        db.refresh(existing)
+    except Exception:
+        db.rollback()
+        raise
+    return existing
