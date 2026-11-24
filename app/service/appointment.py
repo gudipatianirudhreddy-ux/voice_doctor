@@ -104,7 +104,23 @@ def check_doctor_availability(
             detail="Active doctor not found",
         )
 
-    ensure_daily_slots(requested_date, db)\n\n    start_of_day = datetime.combine(requested_date, time.min)
+    ensure_daily_slots(requested_date, db)
+
+    if requested_date.weekday() == 6:
+        active_doctors = (
+            db.query(Doctors)
+            .filter(Doctors.is_active.is_(True))
+            .order_by(Doctors.id)
+            .all()
+        )
+        if len(active_doctors) > 1:
+            day_off_doctor = active_doctors[
+                requested_date.isocalendar().week % len(active_doctors)
+            ]
+            if day_off_doctor.id == doctor_id:
+                return []
+
+    start_of_day = datetime.combine(requested_date, time.min)
     start_of_next_day = start_of_day + timedelta(days=1)
 
     booked_slot_ids = (
