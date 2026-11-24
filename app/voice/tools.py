@@ -7,7 +7,7 @@ from sqlalchemy import or_
 from pipecat.services.llm_service import FunctionCallParams
 
 from app.database import SessionLocal
-from app.models import Doctors, Patient, Slots, appointment as Appointment
+from app.models import Doctors, Patient, Slots, Status, appointment as Appointment
 from app.schemas import AppointmentCreate, CancelAppointmentRequest
 from app.service.appointment import (
     book_appointment as create_appointment,
@@ -226,7 +226,7 @@ async def get_appointment_for_reschedule(
         if patient is None or patient.phone != phone_number.strip():
             await _send(params, {"success": False, "message": "Phone number does not match the appointment patient."})
             return
-        if appointment.status == __import__("app.models", fromlist=["Status"]).Status.CANCELLED:
+        if appointment.status == Status.CANCELLED:
             await _send(params, {"success": False, "message": "This appointment is cancelled and cannot be rescheduled."})
             return
         doctor = db.query(Doctors).filter(Doctors.id == appointment.doctor_id).first()
