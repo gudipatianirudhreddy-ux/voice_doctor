@@ -40,13 +40,13 @@ async def _send(params, payload: dict[str, Any]) -> None:
     await params.result_callback(payload)
 
 
-async def find_doctors(params):
+async def find_doctors(params, search_term: str):
     """Search active doctors by name or specialty.
 
     Args:
         search_term: Doctor name or specialty, for example cardiology.
     """
-    term = params.arguments.get("search_term", "").strip()
+    term = search_term.strip()
     if not term:
         await _send(params, {"success": False, "message": "Ask for a doctor name or specialty."})
         return
@@ -77,7 +77,7 @@ async def find_doctors(params):
         db.close()
 
 
-async def check_doctor_availability(params):
+async def check_doctor_availability(params, doctor_id: int, requested_date: str):
     """Check available slots for a doctor on a date.
 
     Args:
@@ -119,7 +119,7 @@ async def check_doctor_availability(params):
         db.close()
 
 
-async def book_appointment(params):
+async def book_appointment(params, doctor_id: int, slot_id: int, patient_name: str, phone_number: str):
     """Book a slot only after the caller confirms doctor, date, time, name and phone.
 
     Args:
@@ -149,7 +149,7 @@ async def book_appointment(params):
         db.close()
 
 
-async def cancel_appointment(params):
+async def cancel_appointment(params, appointment_id: int, phone_number: str):
     """Cancel after collecting appointment ID and verifying the registered phone.
 
     Args:
