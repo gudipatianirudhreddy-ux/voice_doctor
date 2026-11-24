@@ -37,3 +37,8 @@ class AppointmentResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class RescheduleAppointmentRequest(BaseModel):
+    phone_number: str = Field(min_length=7, max_length=20)
+    new_slot_id: int
