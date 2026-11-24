@@ -64,7 +64,7 @@ async def run_bot(
         settings=GroqLLMService.Settings(
             model=os.getenv(
                 "GROQ_MODEL",
-                "openai/gpt-oss-20b",
+                "qwen/qwen3.8-27b",
             ),
             system_instruction=(
                 f"Today's date is {today_ist}; caller timezone is Asia/Kolkata (IST). "
