@@ -45,10 +45,18 @@ Requirements: Python 3.13+ and [uv](https://docs.astral.sh/uv/).
 
 ## Frontend development
 
-The frontend is isolated in `frontend/`; it does not alter backend dependencies or files.
+The frontend is isolated in `frontend/`; it does not alter backend dependencies or files. The app uses three local processes during development: REST API (port 8000), Pipecat WebRTC signaling/bot runner (port 7860), and Vite (port 5173).
 
-1. Start the backend using the instructions above.
-2. In a second terminal:
+1. Start the REST backend using the instructions above.
+2. In a second terminal, start the Pipecat runner from the `backend/` directory (with your root `.env` loaded):
+
+   ```bash
+   cd backend
+   uv run python -m app.voice.bot -t webrtc
+   ```
+
+   The Pipecat runner exposes the session start endpoint at `http://localhost:7860/start`.
+3. In a third terminal:
 
    ```bash
    cd frontend
@@ -59,7 +67,7 @@ The frontend is isolated in `frontend/`; it does not alter backend dependencies 
 
    Open http://localhost:5173.
 
-Set `VITE_API_BASE_URL` in `frontend/.env` if your API origin differs from `http://127.0.0.1:8000`. Never put API secrets in variables prefixed with `VITE_`.
+Set `VITE_API_BASE_URL` and `VITE_PIPECAT_BASE_URL` in `frontend/.env` if your API or runner origins differ from their local defaults. Never put API secrets in variables prefixed with `VITE_`.
 
 The REST API allows local browser origins on ports 5173 (Vite) and 3000 by default. To override these, set `FRONTEND_ORIGINS` to a comma-separated list of full origins, for example:
 
