@@ -169,3 +169,37 @@ async def cancel_appointment(params: FunctionCallParams, appointment_id: int, ph
         await _send(params, {"success": False, "message": "Cancellation failed temporarily. Do not claim it was cancelled."})
     finally:
         db.close()
+
+
+async def reschedule_appointment(
+    params: FunctionCallParams,
+    appointment_id: int,
+    phone_number: str,
+    new_slot_id: int,
+):
+    """Reschedule an existing appointment after verifying its appointment ID and registered phone.
+
+    Args:
+        appointment_id: Existing appointment reference supplied by the caller.
+        phone_number: Phone number registered to the appointment, confirmed by caller.
+        new_slot_id: Available slot ID returned by check_doctor_availability for the requested date.
+    """
+    from app.service.appointment import reschedule_appointment as move_appointment
+
+    db = SessionLocal()
+    try:
+        appointment = move_appointment(
+            appointment_id=int(appointment_id),
+            phone_number=phone_number.strip(),
+            new_slot_id=int(new_slot_id),
+            db=db,
+        )
+        await _send(params, _appointment_payload(db, appointment))
+    except HTTPException as exc:
+        await _send(params, {"success": False, "message": exc.detail})
+    except (KeyError, TypeError, ValueError):
+        await _send(params, {"success": False, "message": "Appointment ID, phone number, or slot ID is invalid."})
+    except Exception:
+        await _send(params, {"success": False, "message": "Rescheduling failed temporarily. Do not claim the appointment was changed."})
+    finally:
+        db.close()
