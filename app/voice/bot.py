@@ -19,6 +19,7 @@ from app.voice.tools import (
     book_appointment,
     cancel_appointment,
     reschedule_appointment,
+    get_appointment_for_reschedule,
 )
 from pipecat.processors.aggregators.llm_response_universal import (
     LLMContextAggregatorPair,
@@ -70,7 +71,8 @@ async def run_bot(
                 "Interpret relative dates like tomorrow and the 25th using this date. "
                 "For availability, pass requested_date in YYYY-MM-DD format. "
                 "For rescheduling, first collect the existing appointment ID and registered phone number, "
-                "then identify the doctor from that appointment if available, check the requested date, "
+                "call get_appointment_for_reschedule to verify them and obtain the original doctor_id, "
+                "then call check_doctor_availability for the requested date using that doctor_id, "
                 "offer only returned slot IDs, and call reschedule_appointment only after the caller "
                 "confirms the new slot. Never cancel the original appointment before rescheduling. "
                 "After successful rescheduling, tell the caller the appointment ID and new date/time. "
@@ -108,6 +110,7 @@ async def run_bot(
             book_appointment,
             cancel_appointment,
             reschedule_appointment,
+            get_appointment_for_reschedule,
         ]
     )
 
