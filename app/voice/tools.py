@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy import or_
+from pipecat.services.llm_service import FunctionCallParams
 
 from app.database import SessionLocal
 from app.models import Doctors, Patient, Slots, appointment as Appointment
@@ -36,11 +37,11 @@ def _appointment_payload(db, appointment: Appointment) -> dict[str, Any]:
     }
 
 
-async def _send(params, payload: dict[str, Any]) -> None:
+async def _send(params: FunctionCallParams, payload: dict[str, Any]) -> None:
     await params.result_callback(payload)
 
 
-async def find_doctors(params, search_term: str):
+async def find_doctors(params: FunctionCallParams, search_term: str):
     """Search active doctors by name or specialty.
 
     Args:
@@ -48,7 +49,7 @@ async def find_doctors(params, search_term: str):
     """
     term = search_term.strip()
     if not term:
-        await _send(params, {"success": False, "message": "Ask for a doctor name or specialty."})
+        await _send(params: FunctionCallParams, {"success": False, "message": "Ask for a doctor name or specialty."})
         return
 
     db = SessionLocal()
@@ -63,7 +64,7 @@ async def find_doctors(params, search_term: str):
             .limit(10)
             .all()
         )
-        await _send(params, {
+        await _send(params: FunctionCallParams, {
             "success": True,
             "doctors": [
                 {"doctor_id": d.id, "name": d.name, "specialty": d.specialty, "description": d.description}
@@ -72,12 +73,12 @@ async def find_doctors(params, search_term: str):
             "message": "No active doctors matched." if not doctors else None,
         })
     except Exception:
-        await _send(params, {"success": False, "message": "Doctor search failed temporarily."})
+        await _send(params: FunctionCallParams, {"success": False, "message": "Doctor search failed temporarily."})
     finally:
         db.close()
 
 
-async def check_doctor_availability(params, doctor_id: int, requested_date: str):
+async def check_doctor_availability(params: FunctionCallParams, doctor_id: int, requested_date: str):
     """Check available slots for a doctor on a date.
 
     Args:
@@ -88,17 +89,17 @@ async def check_doctor_availability(params, doctor_id: int, requested_date: str)
         day = date.fromisoformat(requested_date)
         doctor_id = int(doctor_id)
     except (KeyError, TypeError, ValueError):
-        await _send(params, {"success": False, "message": "Provide a valid doctor ID and YYYY-MM-DD date."})
+        await _send(params: FunctionCallParams, {"success": False, "message": "Provide a valid doctor ID and YYYY-MM-DD date."})
         return
 
     db = SessionLocal()
     try:
         doctor = db.query(Doctors).filter(Doctors.id == doctor_id, Doctors.is_active.is_(True)).first()
         if doctor is None:
-            await _send(params, {"success": False, "message": "Active doctor not found."})
+            await _send(params: FunctionCallParams, {"success": False, "message": "Active doctor not found."})
             return
         slots = get_available_slots(doctor_id, db, day)
-        await _send(params, {
+        await _send(params: FunctionCallParams, {
             "success": True,
             "doctor_id": doctor.id,
             "doctor_name": doctor.name,
@@ -111,14 +112,14 @@ async def check_doctor_availability(params, doctor_id: int, requested_date: str)
             "message": "No available slots for that date." if not slots else None,
         })
     except HTTPException as exc:
-        await _send(params, {"success": False, "message": exc.detail})
+        await _send(params: FunctionCallParams, {"success": False, "message": exc.detail})
     except Exception:
-        await _send(params, {"success": False, "message": "Availability check failed temporarily."})
+        await _send(params: FunctionCallParams, {"success": False, "message": "Availability check failed temporarily."})
     finally:
         db.close()
 
 
-async def book_appointment(params, doctor_id: int, slot_id: int, patient_name: str, phone_number: str):
+async def book_appointment(params: FunctionCallParams, doctor_id: int, slot_id: int, patient_name: str, phone_number: str):
     """Book a slot only after the caller confirms doctor, date, time, name and phone.
 
     Args:
@@ -136,18 +137,18 @@ async def book_appointment(params, doctor_id: int, slot_id: int, patient_name: s
             phone_number=phone_number.strip(),
         )
         appointment = create_appointment(payload, db)
-        await _send(params, _appointment_payload(db, appointment))
+        await _send(params: FunctionCallParams, _appointment_payload(db, appointment))
     except HTTPException as exc:
-        await _send(params, {"success": False, "message": exc.detail})
+        await _send(params: FunctionCallParams, {"success": False, "message": exc.detail})
     except (KeyError, TypeError, ValueError):
-        await _send(params, {"success": False, "message": "Booking details were invalid. Confirm them with the caller."})
+        await _send(params: FunctionCallParams, {"success": False, "message": "Booking details were invalid. Confirm them with the caller."})
     except Exception:
-        await _send(params, {"success": False, "message": "Booking failed temporarily. Do not claim it was booked."})
+        await _send(params: FunctionCallParams, {"success": False, "message": "Booking failed temporarily. Do not claim it was booked."})
     finally:
         db.close()
 
 
-async def cancel_appointment(params, appointment_id: int, phone_number: str):
+async def cancel_appointment(params: FunctionCallParams, appointment_id: int, phone_number: str):
     """Cancel after collecting appointment ID and verifying the registered phone.
 
     Args:
@@ -159,12 +160,12 @@ async def cancel_appointment(params, appointment_id: int, phone_number: str):
         appointment_id = int(appointment_id)
         request = CancelAppointmentRequest(phone_number=phone_number.strip())
         appointment = cancel_existing_appointment(appointment_id, request, db)
-        await _send(params, _appointment_payload(db, appointment))
+        await _send(params: FunctionCallParams, _appointment_payload(db, appointment))
     except HTTPException as exc:
-        await _send(params, {"success": False, "message": exc.detail})
+        await _send(params: FunctionCallParams, {"success": False, "message": exc.detail})
     except (KeyError, TypeError, ValueError):
-        await _send(params, {"success": False, "message": "Appointment ID or phone number is invalid."})
+        await _send(params: FunctionCallParams, {"success": False, "message": "Appointment ID or phone number is invalid."})
     except Exception:
-        await _send(params, {"success": False, "message": "Cancellation failed temporarily. Do not claim it was cancelled."})
+        await _send(params: FunctionCallParams, {"success": False, "message": "Cancellation failed temporarily. Do not claim it was cancelled."})
     finally:
         db.close()
