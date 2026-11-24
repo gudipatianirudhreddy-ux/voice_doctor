@@ -11,7 +11,7 @@ import {
   type TransportState,
 } from "@pipecat-ai/client-js";
 import { SmallWebRTCTransport } from "@pipecat-ai/small-webrtc-transport";
-import { api } from "./lib/api";
+import { api, type Appointment, type Doctor } from "./lib/api";
 
 type ApiState = "checking" | "online" | "offline";
 type VoiceState = "idle" | "connecting" | "connected" | "error";
@@ -57,8 +57,8 @@ export default function App() {
   const [transportState, setTransportState] = useState("disconnected");
   const [transcript, setTranscript] = useState<TranscriptLine[]>([]);
   const [page, setPage] = useState<Page>("overview");
-  const [appointments, setAppointments] = useState<api.Appointment[]>([]);
-  const [doctors, setDoctors] = useState<api.Doctor[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [dataError, setDataError] = useState("");
 
@@ -200,7 +200,7 @@ export default function App() {
         <div className="section-heading"><div><h2>Your care at a glance</h2><p>A clear view of your appointment activity.</p></div><button className="text-button" onClick={() => setPage("appointments")}>View all <span>→</span></button></div>
         <div className="stats-grid"><article className="stat-card"><div className="stat-icon blue"><CalendarDays size={19}/></div><span className="stat-label">Appointments</span><strong>{appointments.length}</strong><small>Recent bookings</small></article><article className="stat-card"><div className="stat-icon green"><Users size={19}/></div><span className="stat-label">Doctors</span><strong>{doctors.length}</strong><small>Available specialists</small></article><article className="stat-card"><div className="stat-icon amber"><Clock3 size={19}/></div><span className="stat-label">Next visit</span><strong>{appointments.filter((item) => item.status.toLowerCase() !== "cancelled").length ? new Date(appointments.find((item) => item.status.toLowerCase() !== "cancelled")!.start_time).toLocaleDateString() : "—"}</strong><small>Your upcoming care</small></article></div>
 
-        <section className="appointments-panel"><div className="panel-heading"><div><h2>Recent appointments</h2><p>Your latest appointment updates will appear here.</p></div><span className="panel-icon"><CalendarDays size={19}/></span></div><div className="empty-state"><div className="empty-icon"><CalendarDays size={24}/></div><strong>Nothing scheduled yet</strong><p>Once you book an appointment, you'll find the details here.</p></div></section>
+        <section className="appointments-panel"><div className="panel-heading"><div><h2>Recent appointments</h2><p>Your latest appointment updates will appear here.</p></div><span className="panel-icon"><CalendarDays size={19}/></span></div>{dataError && <p className="data-error" role="alert">{dataError}</p>}{dataLoading ? <p className="data-message">Loading appointments…</p> : appointments.length === 0 ? <div className="empty-state"><div className="empty-icon"><CalendarDays size={24}/></div><strong>Nothing scheduled yet</strong><p>Once you book an appointment, you'll find the details here.</p></div> : <div className="data-list">{appointments.slice(0,4).map((item) => <article className="data-row" key={item.appointment_id}><div><strong>{item.patient_name}</strong><p>{item.doctor_name} · {item.specialty}</p><small>{new Date(item.start_time).toLocaleString()}</small></div><span className={`appointment-status ${item.status.toLowerCase()}`}>{item.status}</span></article>}</div>}</section>
         </>}
 
         {page === "appointments" && <section className="appointments-panel page-panel">
