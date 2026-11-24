@@ -17,7 +17,33 @@ type ApiState = "checking" | "online" | "offline";
 type VoiceState = "idle" | "connecting" | "connected" | "error";
 type TranscriptLine = { id: number; speaker: "You" | "Voice Doctor"; text: string };
 type Page = "overview" | "appointments" | "doctors";
+type AppointmentFilter = "all" | "upcoming" | "completed" | "cancelled";
 
+
+function formatAppointmentDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit", month: "short", year: "numeric",
+    hour: "numeric", minute: "2-digit", hour12: true,
+  }).format(date);
+}
+
+function formatPatientName(value: string) {
+  return value.replace(/[_]+/g, " ").replace(/\\s+/g, " ").trim();
+}
+
+function appointmentMatchesFilter(item: Appointment, filter: AppointmentFilter) {
+  const status = item.status.toLowerCase();
+  if (filter === "cancelled") return status === "cancelled";
+  if (filter === "completed") {
+    return status !== "cancelled" && new Date(item.end_time).getTime() < Date.now();
+  }
+  if (filter === "upcoming") {
+    return status !== "cancelled" && new Date(item.start_time).getTime() >= Date.now();
+  }
+  return true;
+}
 
 function cleanTranscript(text: string) {
   return text
@@ -61,6 +87,7 @@ export default function App() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [dataError, setDataError] = useState("");
+  const [appointmentFilter, setAppointmentFilter] = useState<AppointmentFilter>("all");
 
   const clientRef = useRef<PipecatClient | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -198,16 +225,20 @@ export default function App() {
 
         {page === "overview" && <>
         <div className="section-heading"><div><h2>Your care at a glance</h2><p>A clear view of your appointment activity.</p></div><button className="text-button" onClick={() => setPage("appointments")}>View all <span>→</span></button></div>
-        <div className="stats-grid"><article className="stat-card"><div className="stat-icon blue"><CalendarDays size={19}/></div><span className="stat-label">Appointments</span><strong>{appointments.length}</strong><small>Recent bookings</small></article><article className="stat-card"><div className="stat-icon green"><Users size={19}/></div><span className="stat-label">Doctors</span><strong>{doctors.length}</strong><small>Available specialists</small></article><article className="stat-card"><div className="stat-icon amber"><Clock3 size={19}/></div><span className="stat-label">Next visit</span><strong>{appointments.filter((item) => item.status.toLowerCase() !== "cancelled").length ? new Date(appointments.find((item) => item.status.toLowerCase() !== "cancelled")!.start_time).toLocaleDateString() : "—"}</strong><small>Your upcoming care</small></article></div>
+        <div className="stats-grid"><article className="stat-card"><div className="stat-icon blue"><CalendarDays size={19}/></div><span className="stat-label">Appointments</span><strong>{appointments.length}</strong><small>Recent bookings</small></article><article className="stat-card"><div className="stat-icon green"><Users size={19}/></div><span className="stat-label">Doctors</span><strong>{doctors.length}</strong><small>Available specialists</small></article><article className="stat-card"><div className="stat-icon amber"><Clock3 size={19}/></div><span className="stat-label">Next visit</span><strong>{appointments.filter((item) => item.status.toLowerCase() !== "cancelled" && new Date(item.start_time).getTime() >= Date.now()).sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())[0] ? formatAppointmentDateTime(appointments.filter((item) => item.status.toLowerCase() !== "cancelled" && new Date(item.start_time).getTime() >= Date.now()).sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())[0].start_time).split(",")[0] : "—"}</strong><small>Your upcoming care</small></article></div>
 
-        <section className="appointments-panel"><div className="panel-heading"><div><h2>Recent appointments</h2><p>Your latest appointment updates will appear here.</p></div><button className="icon-button" onClick={() => void refreshDashboard()} disabled={dataLoading} aria-label="Refresh recent appointments"><CalendarDays size={19}/></button></div>{dataError && <p className="data-error" role="alert">{dataError}</p>}{dataLoading ? <p className="data-message">Loading appointments…</p> : appointments.length === 0 ? <div className="empty-state"><div className="empty-icon"><CalendarDays size={24}/></div><strong>Nothing scheduled yet</strong><p>Once you book an appointment, you'll find the details here.</p></div> : <div className="data-list">{appointments.slice(0,4).map((item) => <article className="data-row" key={item.appointment_id}><div><strong>{item.patient_name}</strong><p>{item.doctor_name} · {item.specialty}</p><small>{new Date(item.start_time).toLocaleString()}</small></div><span className={`appointment-status ${item.status.toLowerCase()}`}>{item.status}</span></article>)}</div>}</section>
+        <section className="appointments-panel"><div className="panel-heading"><div><h2>Recent appointments</h2><p>Your latest appointment updates will appear here.</p></div><button className="icon-button" onClick={() => void refreshDashboard()} disabled={dataLoading} aria-label="Refresh recent appointments"><CalendarDays size={19}/></button></div>{dataError && <p className="data-error" role="alert">{dataError}</p>}{dataLoading ? <p className="data-message">Loading appointments…</p> : appointments.length === 0 ? <div className="empty-state"><div className="empty-icon"><CalendarDays size={24}/></div><strong>Nothing scheduled yet</strong><p>Once you book an appointment, you'll find the details here.</p></div> : <div className="data-list">{appointments.slice(0,4).map((item) => <article className="data-row" key={item.appointment_id}><div><strong>{formatPatientName(item.patient_name)}</strong><p>{item.doctor_name} · {item.specialty}</p><small>{formatAppointmentDateTime(item.start_time)}</small></div><span className={`appointment-status ${item.status.toLowerCase()}`}>{item.status}</span></article>)}</div>}</section>
         </>}
 
         {page === "appointments" && <section className="appointments-panel page-panel">
           <div className="panel-heading"><div><h2>Appointments</h2><p>Your appointment history and upcoming visits.</p></div><button className="icon-button" onClick={() => void refreshDashboard()} disabled={dataLoading} aria-label="Refresh appointments"><Activity size={17}/></button></div>
+          <div className="appointment-filters" role="group" aria-label="Filter appointments">
+            {(["all", "upcoming", "completed", "cancelled"] as AppointmentFilter[]).map((filter) => <button key={filter} type="button" className={appointmentFilter === filter ? "filter-chip active" : "filter-chip"} aria-pressed={appointmentFilter === filter} onClick={() => setAppointmentFilter(filter)}>{filter === "all" ? "All" : filter[0].toUpperCase() + filter.slice(1)}</button>)}
+          </div>
           {dataError && <p className="data-error" role="alert">{dataError}</p>}
           {dataLoading ? <p className="data-message">Loading appointments…</p> : appointments.length === 0 ? <div className="empty-state"><div className="empty-icon"><CalendarDays size={24}/></div><strong>No appointments found</strong><p>Appointments booked through Voice Doctor will appear here.</p></div> :
-            <div className="data-list">{appointments.map((item) => <article className="data-row" key={item.appointment_id}><div><strong>{item.patient_name}</strong><p>{item.doctor_name} · {item.specialty}</p><small>{new Date(item.start_time).toLocaleString()}</small></div><span className={`appointment-status ${item.status.toLowerCase()}`}>{item.status}</span></article>)}</div>}
+            appointments.filter((item) => appointmentMatchesFilter(item, appointmentFilter)).length === 0 ? <div className="empty-state compact-empty"><strong>No {appointmentFilter} appointments</strong><p>Try another filter to see your appointment activity.</p></div> :
+            <div className="data-list">{appointments.filter((item) => appointmentMatchesFilter(item, appointmentFilter)).sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime()).map((item) => <article className="data-row" key={item.appointment_id}><div><strong>{item.patient_name}</strong><p>{item.doctor_name} · {item.specialty}</p><small>{new Date(item.start_time).toLocaleString()}</small></div><span className={`appointment-status ${item.status.toLowerCase()}`}>{item.status}</span></article>)}</div>}
         </section>}
 
         {page === "doctors" && <section className="appointments-panel page-panel">
