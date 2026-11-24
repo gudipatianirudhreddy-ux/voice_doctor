@@ -8,7 +8,7 @@ Voice-based doctor appointment assistant built with FastAPI, SQLAlchemy, Postgre
 - `backend/app/service` — appointment business rules
 - `backend/app/voice` — Pipecat bot and LLM tool adapters
 - `backend/app/migrations` — Alembic migrations
-- `frontend/` — browser dashboard (being developed)
+- `frontend/` — React + TypeScript dashboard (Vite)
 
 ## Backend setup
 
@@ -44,6 +44,22 @@ Requirements: Python 3.13+ and [uv](https://docs.astral.sh/uv/).
    API docs: http://127.0.0.1:8000/docs
 
 ## Frontend development
+
+The frontend is isolated in `frontend/`; it does not alter backend dependencies or files.
+
+1. Start the backend using the instructions above.
+2. In a second terminal:
+
+   ```bash
+   cd frontend
+   npm install
+   cp .env.example .env
+   npm run dev
+   ```
+
+   Open http://localhost:5173.
+
+Set `VITE_API_BASE_URL` in `frontend/.env` if your API origin differs from `http://127.0.0.1:8000`. Never put API secrets in variables prefixed with `VITE_`.
 
 The REST API allows local browser origins on ports 5173 (Vite) and 3000 by default. To override these, set `FRONTEND_ORIGINS` to a comma-separated list of full origins, for example:
 
