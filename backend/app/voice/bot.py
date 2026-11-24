@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from loguru import logger
 
 from pipecat.audio.vad.silero import SileroVADAnalyzer
-from pipecat.frames.frames import LLMRunFrame
+from pipecat.frames.frames import TTSSpeakFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker
 
@@ -168,17 +168,16 @@ async def run_bot(
     async def on_client_connected(transport, client):
         logger.info("Browser connected")
 
-        context.add_message(
-            {
-                "role": "developer",
-                "content": (
-                    "Welcome the caller to Voice Doctor "
-                    "and ask how you can help."
-                ),
-            }
+        # Speak a fixed greeting without calling the LLM on an empty context.
+        # The spoken text is appended to context for the caller's first turn.
+        await worker.queue_frames(
+            [
+                TTSSpeakFrame(
+                    text="Welcome to Voice Doctor! How can I help you today?",
+                    append_to_context=True,
+                )
+            ]
         )
-
-        await worker.queue_frames([LLMRunFrame()])
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):
