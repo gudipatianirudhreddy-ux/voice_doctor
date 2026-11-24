@@ -15,11 +15,13 @@
     "react": "latest",
     "react-dom": "latest",
     "tailwindcss": "latest",
-    "vite": "latest"
+    "vite": "latest",
+    "@pipecat-ai/client-js": "latest",
+    "@pipecat-ai/small-webrtc-transport": "latest"
   },
   "devDependencies": {
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "typescript": "latest"
   }
-}
+}\n
