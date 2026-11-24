@@ -30,7 +30,7 @@ function formatAppointmentDateTime(value: string) {
 }
 
 function formatPatientName(value: string) {
-  return value.replace(/[_]+/g, " ").replace(/\\s+/g, " ").trim();
+  return value.replace(/[_]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function appointmentMatchesFilter(item: Appointment, filter: AppointmentFilter) {
@@ -238,7 +238,7 @@ export default function App() {
           {dataError && <p className="data-error" role="alert">{dataError}</p>}
           {dataLoading ? <p className="data-message">Loading appointments…</p> : appointments.length === 0 ? <div className="empty-state"><div className="empty-icon"><CalendarDays size={24}/></div><strong>No appointments found</strong><p>Appointments booked through Voice Doctor will appear here.</p></div> :
             appointments.filter((item) => appointmentMatchesFilter(item, appointmentFilter)).length === 0 ? <div className="empty-state compact-empty"><strong>No {appointmentFilter} appointments</strong><p>Try another filter to see your appointment activity.</p></div> :
-            <div className="data-list">{appointments.filter((item) => appointmentMatchesFilter(item, appointmentFilter)).sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime()).map((item) => <article className="data-row" key={item.appointment_id}><div><strong>{item.patient_name}</strong><p>{item.doctor_name} · {item.specialty}</p><small>{new Date(item.start_time).toLocaleString()}</small></div><span className={`appointment-status ${item.status.toLowerCase()}`}>{item.status}</span></article>)}</div>}
+            <div className="data-list">{appointments.filter((item) => appointmentMatchesFilter(item, appointmentFilter)).sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime()).map((item) => <article className="data-row" key={item.appointment_id}><div><strong>{formatPatientName(item.patient_name)}</strong><p>{item.doctor_name} · {item.specialty}</p><small>{formatAppointmentDateTime(item.start_time)}</small></div><span className={`appointment-status ${item.status.toLowerCase()}`}>{item.status}</span></article>)}</div>}
         </section>}
 
         {page === "doctors" && <section className="appointments-panel page-panel">
