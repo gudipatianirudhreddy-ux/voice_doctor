@@ -17,6 +17,34 @@ type ApiState = "checking" | "online" | "offline";
 type VoiceState = "idle" | "connecting" | "connected" | "error";
 type TranscriptLine = { id: number; speaker: "You" | "Voice Doctor"; text: string };
 
+function cleanTranscript(text: string) {
+  return text
+    .replace(/\\*\\*(.*?)\\*\\*/g, "$1")
+    .replace(/^\\s*(?:\\d+[.)]|[-*])\\s*/gm, "")
+    .replace(/\\s+/g, " ")
+    .trim();
+}
+
+function addTranscriptLine(
+  lines: TranscriptLine[],
+  speaker: TranscriptLine["speaker"],
+  rawText: string,
+  nextId: () => number,
+) {
+  const text = cleanTranscript(rawText);
+  if (!text) return lines;
+  const last = lines[lines.length - 1];
+  if (last?.speaker === speaker) {
+    if (text.startsWith(last.text)) {
+      return [...lines.slice(0, -1), { ...last, text }];
+    }
+    if (last.text.endsWith(text)) return lines;
+    const separator = /[\\s.,!?;:]$/.test(last.text) ? "" : " ";
+    return [...lines.slice(0, -1), { ...last, text: last.text + separator + text }];
+  }
+  return [...lines, { id: nextId(), speaker, text }];
+}
+
 const PIPECAT_URL = (import.meta.env.VITE_PIPECAT_BASE_URL ?? "http://localhost:7860").replace(/\/$/, "");
 
 export default function App() {
@@ -68,12 +96,12 @@ export default function App() {
         },
         onUserTranscript: (data: TranscriptData) => {
           if (data.final && data.text.trim()) {
-            setTranscript((lines) => [...lines, { id: ++lineId.current, speaker: "You", text: data.text }]);
+            setTranscript((lines) => addTranscriptLine(lines, "You", data.text, () => ++lineId.current));
           }
         },
         onBotTranscript: (data: BotLLMTextData) => {
           if (data.text.trim()) {
-            setTranscript((lines) => [...lines, { id: ++lineId.current, speaker: "Voice Doctor", text: data.text }]);
+            setTranscript((lines) => addTranscriptLine(lines, "Voice Doctor", data.text, () => ++lineId.current));
           }
         },
         onTrackStarted: (track: MediaStreamTrack, participant?: Participant) => {
